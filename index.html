@@ -84,8 +84,8 @@
            opacity: 0; transition: opacity .2s; pointer-events: none; }
   #toast.on { opacity: 1; }
   #hint { position: fixed; left: 16px; bottom: 12px; font-size: 13px; color: #434343; }
-  body.mobile { background: #fff; }
-  body.mobile #phone { border-radius: 0; box-shadow: none; }
+  body.mobile { background: #fff; display: block; overflow-x: hidden; overflow-y: auto; }
+  body.mobile #phone { border-radius: 0; box-shadow: none; transform-origin: 0 0; }
   body.mobile #hint { display: none; }
 </style>
 </head>
@@ -394,12 +394,13 @@ addEventListener('popstate', e => {
 });
 
 function fit() {
-  // 폰에서 열면 테두리 없이 화면을 꽉 채운다
+  // 폰에서 열면 테두리 없이 가로 폭을 꽉 채우고, 남는 아래쪽은 페이지 스크롤로 본다
   const mobile = innerWidth < 600;
   document.body.classList.toggle('mobile', mobile);
-  const s = mobile ? Math.min(innerWidth / 402, innerHeight / 874)
+  const s = mobile ? innerWidth / 402
                    : Math.min(1, (innerHeight - 48) / 894, (innerWidth - 48) / 422);
   phone.style.transform = `scale(${s})`;
+  phone.style.marginBottom = mobile ? `${874 * (s - 1)}px` : '';
 }
 
 addEventListener('resize', fit);
