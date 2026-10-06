@@ -521,15 +521,6 @@ button {
   outline: 3px solid #20bde1;
   outline-offset: 3px;
 }
-.time {
-  border: 0;
-  background: #f2f3f5;
-  color: #566172;
-  font-size: 16px;
-  font-weight: 700;
-  width: 76px;
-  height: 36px;
-}
 .group {
   border: 0;
   border-radius: 8px;
@@ -912,6 +903,143 @@ button {
   pointer-events: none;
   z-index: 3;
 }
+/* 시간을 바꾸면 잠깐 하늘색으로 강조된다 */
+.ss-time.changed {
+  animation: time-changed 0.8s ease-out;
+}
+@keyframes time-changed {
+  from {
+    color: #00a9cc;
+    transform: scale(1.08);
+  }
+}
+/* 브리핑 시간 시트: 시·분 휠. 가운데 칸이 고른 값 */
+.time-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+}
+.time-panel {
+  top: auto;
+  bottom: 0;
+  height: auto;
+  padding: 12px 24px 24px;
+  border-radius: 36px 36px 0 0;
+  background: #fff;
+  box-sizing: border-box;
+}
+.grabber {
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin: 0 auto 20px;
+  border-radius: 2px;
+  background: #d1d6db;
+}
+.time-panel h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  line-height: 28px;
+  color: #191f28;
+}
+.time-panel p {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #8b95a1;
+}
+.wheels {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 220px;
+}
+.wheels::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 88px;
+  height: 44px;
+  border-radius: 12px;
+  background: #f2f4f6;
+}
+.wheels b {
+  position: relative;
+  font-size: 22px;
+  color: #191f28;
+}
+.wheel {
+  position: relative;
+  width: 80px;
+  height: 220px;
+  padding: 88px 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  outline: 0;
+  -webkit-mask-image: linear-gradient(transparent, #000 35%, #000 65%, transparent);
+  mask-image: linear-gradient(transparent, #000 35%, #000 65%, transparent);
+}
+.wheel::-webkit-scrollbar {
+  display: none;
+}
+.wheel:focus-visible {
+  box-shadow: inset 0 0 0 2px #20bde1;
+  border-radius: 12px;
+}
+.wheel span {
+  display: block;
+  height: 44px;
+  line-height: 44px;
+  text-align: center;
+  font-size: 22px;
+  color: #b0b8c1;
+  scroll-snap-align: center;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.wheel span.on {
+  color: #191f28;
+  font-weight: 700;
+}
+.time-hint {
+  display: block;
+  min-height: 20px;
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+  color: #d93f42;
+}
+.time-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.time-actions button {
+  flex: none;
+  width: 108px;
+  height: 56px;
+  border: 0;
+  border-radius: 12px;
+  background: #f2f4f6;
+  color: #4e5968;
+  font-size: 16px;
+  font-weight: 700;
+}
+.time-actions .primary {
+  flex: 1;
+  background: #10385c;
+  color: #fff;
+  transition: opacity 0.2s;
+}
+.time-actions .primary:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .ss-search-input {
   position: absolute;
   left: 64px;
@@ -969,7 +1097,6 @@ button {
 #ss .figma { opacity: 0 !important; }
 #ss .ss-search-input.figma:not(:focus) { background: transparent; color: transparent; }
 #ss .ss-search-input.figma { opacity: 1 !important; }
-#ss select.time { opacity: 0; }
 .ss-list > .feed-empty { margin-left: 30px; margin-right: 30px; }
 </style>
 </head>
@@ -1975,20 +2102,91 @@ function back() {
     hot(el, 10, 270, 383, 98, '출근길 브리핑 알림 열기', 'morning');
   }
 
+  // 브리핑 시간 시트: 시·분 휠로 고른다. 출근길 < 점심 < 퇴근길 순서를 어기면 확인을 막고 이유를 알려 준다
+  const TIME_LABELS = { morning: '출근길 브리프', lunch: '점심 브리핑', evening: '퇴근길 브리프' };
+  const toMin = t => +t.slice(0, 2) * 60 + +t.slice(3);
+  function wheel(col, items, start, onChange) {
+    const ROW = 44;
+    col.tabIndex = 0;
+    for (const v of items) col.append(Object.assign(document.createElement('span'), { textContent: v }));
+    const spans = [...col.children];
+    const at = () => Math.max(0, Math.min(items.length - 1, Math.round(col.scrollTop / ROW)));
+    const paint = () => {
+      spans.forEach((s, k) => s.classList.toggle('on', k === at()));
+      onChange();
+    };
+    col.onscroll = () => requestAnimationFrame(paint);
+    spans.forEach((s, k) => (s.onclick = () => col.scrollTo({ top: k * ROW, behavior: 'smooth' })));
+    col.onkeydown = e => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      e.stopPropagation();
+      col.scrollTo({ top: (at() + (e.key === 'ArrowDown' ? 1 : -1)) * ROW, behavior: 'smooth' });
+    };
+    col.scrollTop = items.indexOf(start) * ROW;
+    const get = () => items[at()];
+    paint();
+    return get;
+  }
+  function timeSheet(el, key, done) {
+    const wrap = box('time-sheet modal sheet-in', {}, el);
+    const close = () => {
+      wrap.classList.replace('sheet-in', 'sheet-out');
+      setTimeout(() => wrap.remove(), 260);
+    };
+    wrap.close = close;
+    box('dim', {}, wrap).onclick = close;
+    const sh = box('sheet time-panel', {}, wrap);
+    sh.setAttribute('role', 'dialog');
+    sh.setAttribute('aria-label', TIME_LABELS[key] + ' 시간');
+    sh.innerHTML =
+      '<i class="grabber"></i><h2></h2><p>알림을 받을 시간을 골라 주세요</p><div class="wheels"><div class="wheel" aria-label="시"></div><b>:</b><div class="wheel" aria-label="분"></div></div><small class="time-hint" role="status"></small><div class="time-actions"></div>';
+    sh.querySelector('h2').textContent = TIME_LABELS[key] + ' 시간';
+    const hint = sh.querySelector('.time-hint');
+    let getH, getM;
+    const value = () => getH() + ':' + getM();
+    const ok = uiButton(
+      '확인',
+      () => {
+        prefs.times[key] = value();
+        close();
+        done();
+      },
+      'primary',
+    );
+    sh.querySelector('.time-actions').append(uiButton('취소', close), ok);
+    // 앞뒤 브리프 시간과 순서를 확인한다
+    const check = () => {
+      if (!getH || !getM) return;
+      const v = toMin(value()),
+        i = BRIEFS.indexOf(key),
+        prev = BRIEFS[i - 1],
+        next = BRIEFS[i + 1];
+      let msg = '';
+      if (prev && v <= toMin(prefs.times[prev])) msg = `${TIME_LABELS[prev]}(${prefs.times[prev]})보다 늦은 시간으로 골라 주세요`;
+      else if (next && v >= toMin(prefs.times[next])) msg = `${TIME_LABELS[next]}(${prefs.times[next]})보다 이른 시간으로 골라 주세요`;
+      hint.textContent = msg;
+      ok.disabled = !!msg;
+    };
+    const [hw, mw] = sh.querySelectorAll('.wheel');
+    const [h0, m0] = prefs.times[key].split(':');
+    getH = wheel(hw, [...Array(24).keys()].map(n => String(n).padStart(2, '0')), h0, check);
+    getM = wheel(mw, ['00', '10', '20', '30', '40', '50'], m0, check);
+    check();
+  }
+
   function settings(el) {
     hot(el, 10, 14, 44, 44, '이전 화면', back);
     // 기본값 그대로면 조작부를 투명하게 두어 Figma 그림이 보이고, 바뀐 뒤에만 같은 모양의 HTML로 그린다
     const togglesChanged = ['enabled', ...BRIEFS].some(k => !prefs[k]);
     const groupsChanged = prefs.groups.join() !== '그룹1';
-    const toggles = {},
-      selects = {};
+    const toggles = {};
     // 토글은 다시 그리지 않고 그 자리에서 바꿔야 손잡이가 미끄러진다
     const paintToggles = () => {
       for (const [key, b] of Object.entries(toggles)) {
         b.setAttribute('aria-checked', String(prefs[key]));
         if (key !== 'enabled') b.setAttribute('aria-disabled', String(!prefs.enabled));
       }
-      for (const [key, s] of Object.entries(selects)) s.classList.toggle('off', !prefs.enabled || !prefs[key]);
     };
     const addToggle = (key, x, y) => {
       const b = controlsPosition(document.createElement('button'), x, y);
@@ -2012,31 +2210,28 @@ function back() {
       ['evening', 459, 463.6],
     ].forEach(([key, y, ty]) => {
       addToggle(key, 316, y);
-      // 시간: 보이는 건 Figma 글자, 누르면 목록이 뜬다. 바꾼 뒤에만 같은 글꼴로 덮어 쓴다.
-      if (prefs.times[key] !== DEFAULT_TIMES[key]) {
-        patch(el, 224, ty - 2, 54, 23, '#f2f4f6');
-        box('ss-time', { top: px(ty) }, el).textContent = prefs.times[key];
-      }
-      const select = controlsPosition(document.createElement('select'), 222, y - 4);
-      select.classList.add('time');
-      select.setAttribute('aria-label', NAMES[key] + ' 알림 시간');
-      for (let h = 6; h <= 22; h++)
-        for (const m of ['00', '30']) {
-          const time = String(h).padStart(2, '0') + ':' + m;
-          select.add(new Option(time, time, false, time === prefs.times[key]));
+      // 시간: 보이는 건 Figma 글자, 누르면 시간 시트가 올라온다. 바꾼 뒤에만 같은 글꼴로 덮어 쓴다.
+      let label;
+      const paintTime = () => {
+        if (!label) {
+          if (prefs.times[key] === DEFAULT_TIMES[key]) return;
+          patch(el, 224, ty - 2, 54, 23, '#f2f4f6');
+          label = box('ss-time', { top: px(ty) }, el);
         }
-      // 꺼진 알림의 시간은 목록을 열지 않고 이유를 알려 준다
-      select.onmousedown = select.onkeydown = e => {
-        if (!select.classList.contains('off') || e.key === 'Tab') return;
-        e.preventDefault();
-        toast(prefs.enabled ? NAMES[key] + ' 알림을 먼저 켜 주세요' : '쓱 브리프 알림을 먼저 켜 주세요');
+        label.textContent = prefs.times[key];
       };
-      select.onchange = () => {
-        prefs.times[key] = select.value;
-        refresh();
-      };
-      selects[key] = select;
-      el.append(select);
+      paintTime();
+      hot(el, 222, y - 4, 76, 36, NAMES[key] + ' 알림 시간', () => {
+        // 꺼진 알림의 시간은 시트를 열지 않고 이유를 알려 준다
+        if (!prefs.enabled) return toast('쓱 브리프 알림을 먼저 켜 주세요');
+        if (!prefs[key]) return toast(NAMES[key] + ' 알림을 먼저 켜 주세요');
+        timeSheet(el, key, () => {
+          paintTime();
+          label?.classList.remove('changed');
+          void label?.offsetWidth; // 연달아 바꿔도 다시 강조되게
+          label?.classList.add('changed');
+        });
+      });
     });
     paintToggles();
     // 그룹 칩도 그 자리에서 바꾼다. 처음 바꿀 때 Figma 그림의 칩을 가리고 HTML 칩을 보인다
@@ -2276,6 +2471,8 @@ function back() {
     show,
     home: () => lastBrief,
     closeOverlay: () => {
+      const sheet = phone.querySelector('.time-sheet.sheet-in');
+      if (sheet) return sheet.close(), true;
       if (!phone.querySelector('.local-overlay:not(.out)')) return false;
       closeLocalOverlay();
       return true;
@@ -2304,12 +2501,13 @@ addEventListener('resize', fit);
 
 // Figma처럼 누를 수 없는 곳을 누르면 누를 수 있는 곳이 잠깐 깜빡인다
 // 표시 상자는 버튼과 같은 부모 안에 넣어, 스크롤 칸 안 버튼은 함께 잘리고 함께 움직인다
-const TAPPABLE = '.hot:not(.missing), button:not(.period-backdrop), input, select, .seg, .range';
+const TAPPABLE = '.hot:not(.missing), button:not(.period-backdrop), input, .seg, .range, .wheel';
 device.addEventListener('click', e => {
   if (e.target.closest(TAPPABLE + ', .dim, .local-overlay')) return;
   const root = document.getElementById(app);
   root.querySelectorAll('.flash-box').forEach(f => f.remove()); // 연달아 눌러도 다시 깜빡이게
-  for (const t of root.querySelectorAll(TAPPABLE)) {
+  const modal = root.querySelector('.modal'); // 시트가 열려 있으면 시트 안 버튼만
+  for (const t of (modal || root).querySelectorAll(TAPPABLE)) {
     const p = t.offsetParent;
     if (!p || !t.offsetWidth || !root.contains(p) || t.closest('.push-out, .pop-out, .sheet-out, [inert]')) continue;
     const f = document.createElement('i');
